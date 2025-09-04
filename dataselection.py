@@ -10,17 +10,17 @@ input_files = [
     os.path.join(base_dir, "total 2025.csv"),
 ]
 
-# Cột cần drop
+# drop columns
 DROP_COLS = ["From_Nametag", "To_Nametag", "Amount", "Value (USD)", "Events"]
 
-# -------- Helper: parse logs an toàn --------
+# -------- Helper: parse logs  --------
 def parse_logs_cell(cell):
     if isinstance(cell, (list, dict)):
         return cell
     if cell is None or (isinstance(cell, float) and pd.isna(cell)):
         return []
     s = str(cell).strip()
-    # Thử parse JSON (đổi ' -> " nếu cần)
+    # handling exceptions
     try:
         return json.loads(s.replace("'", '"'))
     except Exception:
@@ -32,11 +32,7 @@ def parse_logs_cell(cell):
         return []
 
 def extract_userop_event(logs_cell):
-    """
-    Từ logs, tìm event == 'UserOperationEvent' và lấy:
-    sender, paymaster, logIndex, actualGasCost, actualGasUsed, nonce, success
-    (Ưu tiên trong args, fallback ngoài log)
-    """
+
     logs = parse_logs_cell(logs_cell)
     if isinstance(logs, dict):
         logs = [logs]
@@ -57,24 +53,24 @@ def extract_userop_event(logs_cell):
             }
     return {}
 
-# ---------------------- Xử lý từng file ----------------------
+# ----------------------solve each file ----------------------
 processed_paths = []
 for file in input_files:
     df = pd.read_csv(file)
 
-    # 1) Drop các cột không cần
+    # 1) drop columns 
     df2 = df.drop(columns=DROP_COLS, errors="ignore").copy()
 
-    # 2) Tách thông tin từ logs (event: UserOperationEvent)
+    # 2) Extract UserOperationEvent from logs
     if "logs" in df2.columns:
         extracted = df2["logs"].apply(extract_userop_event)
         extracted_df = pd.json_normalize(extracted)
         final_df = pd.concat([df2, extracted_df], axis=1)
     else:
-        # Nếu không có cột logs thì vẫn lưu ra phần đã drop cột
+        # saving infor to columns
         final_df = df2
 
-    # 3) Lưu file đã xử lý (không lọc theo Status/Method, giữ nguyên cột logs)
+    # 3) saving to path
     base, ext = os.path.splitext(file)
     out_path = f"{base}_processed_no_filter{ext}"
     final_df.to_csv(out_path, index=False, encoding="utf-8-sig")

@@ -23,7 +23,7 @@ def hex_to_length(x):
     return None
 
 def hex_to_int_maybe(x):
-    """'0x..' -> int; số dạng str -> số; khác -> NaN"""
+    """'0x..' -> int; str -> int/float; misisng values -> NaN"""
     if pd.isna(x):
         return np.nan
     s = str(x).strip()
@@ -46,7 +46,7 @@ if "DateTime (UTC)" in df.columns:
     dt = pd.to_datetime(df["DateTime (UTC)"], errors="coerce", utc=True)
     df["DateTime_ts"] = (dt.view("int64") // 10**9)
 
-# ====================== COERCE NUMERIC (kể cả '0x...') ======================
+# ====================== COERCE NUMERIC ======================
 numeric_targets = [
     "Txn Fee", "Gas Used", "logIndex", "actualGasCost",
     "actualGasUsed", "nonce", "success", "Blockno", "DateTime_ts"
@@ -55,38 +55,38 @@ for col in numeric_targets:
     if col in df.columns:
         df[col] = df[col].apply(hex_to_int_maybe)
 
-# ====================== CHỌN CỘT CHO HEATMAP ======================
+# ====================== COLUMNS for HEATMAP ======================
 len_cols = [c for c in df.columns if c.endswith("_len")]
 present_numeric = [c for c in numeric_targets if c in df.columns]
 all_cols = present_numeric + len_cols
 
 num_df = df[all_cols].apply(pd.to_numeric, errors="coerce")
 
-# Loại cột toàn NaN
+# remove entire NaN columns
 all_nan_cols = [c for c in num_df.columns if num_df[c].isna().all()]
 if all_nan_cols:
     num_df = num_df.drop(columns=all_nan_cols)
 
-# Loại cột hằng (std = 0) vì Pearson undefined -> tránh NaN trên đường chéo
+# remove constant columns
 constant_cols = [c for c in num_df.columns if num_df[c].nunique(dropna=True) <= 1]
 if constant_cols:
     num_df = num_df.drop(columns=constant_cols)
 
-# Kiểm tra đủ cột để tính corr
+# checking enough columns left
 if num_df.shape[1] < 2:
     raise ValueError(
-        f"Không đủ cột biến thiên để tính tương quan.\n"
-        f"- Cột toàn NaN: {all_nan_cols}\n"
-        f"- Cột hằng: {constant_cols}"
+        f"variance.\n"
+        f"- entire NaN columns: {all_nan_cols}\n"
+        f"- constant columns: {constant_cols}"
     )
 
 # ====================== PEARSON CORRELATION ======================
 corr = num_df.corr(method="pearson")
 
-# Đảm bảo đường chéo bằng 1
+# default = 1
 np.fill_diagonal(corr.values, 1)
 
-# ====================== LƯU KẾT QUẢ ======================
+# ====================== saving ======================
 corr_csv = os.path.join(base_dir, f"{os.path.splitext(file_name)[0]}_corr_all.csv")
 corr.to_csv(corr_csv, encoding="utf-8-sig")
 
@@ -101,24 +101,24 @@ plt.show()
 print("✅ Correlation CSV:", corr_csv)
 print("✅ Heatmap PNG:", out_png)
 
-# ====================== LƯU FILE CHỈ GỒM *_len + CỘT SỐ ======================
-# Danh sách cột hex gốc (đã có ở trên)
+# ===========================================
+# list of columns by hex
 hex_cols = ["Transaction Hash", "Original", "signature", "From", "To", "sender", "paymaster"]
 df.drop(columns=[c for c in hex_cols if c in df.columns], inplace=True)
-# Lấy các cột *_len nếu đã được tạo
+#list of columns by hex_len 
 wanted_hex_len = [f"{c}_len" for c in hex_cols if f"{c}_len" in df.columns]
 
-# Nhóm cột numeric cần giữ (chỉ giữ những cột đang tồn tại)
+# list of columns by numeric
 extra_cols = [
     "Txn Fee", "Gas Used", "logIndex", "actualGasCost",
     "actualGasUsed", "nonce", "success", "Blockno", "DateTime_ts"
 ]
 wanted_numeric = [c for c in extra_cols if c in df.columns]
 
-# Hợp nhất & loại trùng
+# integrate
 selected_cols = list(dict.fromkeys(wanted_hex_len + wanted_numeric))
 
-# Xuất CSV chỉ gồm các cột mới này (không còn cột gốc hex)
+# saving file
 augmented_csv = os.path.join(base_dir, f"{os.path.splitext(file_name)[0]}_augmented.csv")
 df[selected_cols].to_csv(augmented_csv, index=False, encoding="utf-8-sig")
 

@@ -13,11 +13,11 @@ if missing:
 if not present:
     raise ValueError("Không có cột nào khớp để scale.")
 
-# 2) Ép kiểu số & impute median cho NaN
+
 X = df[present].apply(pd.to_numeric, errors="coerce")
 X_imputed = SimpleImputer(strategy="median").fit_transform(X)
 
-# 3) MinMax scale chỉ trên các cột này
+# 3) MinMax scale on columns
 scaler = MinMaxScaler()                  # nếu dùng preprocessing: preprocessing.MinMaxScaler()
 minmax_arr = scaler.fit_transform(X_imputed)
 
